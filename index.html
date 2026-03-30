@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>个人资产总览</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+body{background:#f8f9fa;color:#222;padding:20px;max-width:1200px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+h1{font-size:24px;margin-bottom:20px}
+h2{font-size:18px;margin-bottom:12px}
+.number{font-size:26px;font-weight:700;margin:8px 0}
+.green{color:#0d9448}
+.red{color:#e11d48}
+.blue{color:#165DFF}
+.label{font-size:14px;color:#666}
+form{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+input,select,button{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+button{background:#165DFF;color:white;border:none;cursor:pointer}
+button.edit{background:#138eff}
+button.del{background:#e11d48}
+button.save{background:#0d9448;margin-right:8px}
+button.load{background:#7950F2;margin-right:8px}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #eee}
+th{background:#f5f7fa}
+.chart-box{height:320px;margin-top:10px}
+
+/* 财务评价样式 */
+.evaluation-card {
+  background: linear-gradient(135deg, #eef5ff 0%, #f5f8ff 100%);
+  border-left: 5px solid #165DFF;
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #333;
+}
+.evaluation-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #165DFF;
+}
+.evaluation-text {
+  white-space: pre-line;
+}
+
+/* 新增：保存功能样式 */
+.save-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.save-format {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#formatTemplate {
+  width: 100%;
+  min-height: 100px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: monospace;
+}
+.hint-text {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+@media(max-width:768px){
+  .chart-grid{grid-template-columns:1fr}
+  .save-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
+</head>
+<body>
+
+<h1>个人资产总览</h1>
+
+<!-- 新增：保存功能区域 -->
+<div class="save-section">
+  <h2 style="margin:0;">数据备份与恢复</h2>
+  <button class="save" onclick="saveData()">💾 保存当前数据</button>
+  <button class="load" onclick="loadData()">📤 导入数据</button>
+  
+  <div class="save-format">
+    <label>保存格式：</label>
+    <select id="saveFormatType">
+      <option value="json">JSON（推荐）</option>
+      <option value="csv">CSV表格</option>
+      <option value="custom">自定义文本格式</option>
+    </select>
+  </div>
+
+  <!-- 自定义格式模板 -->
+  <div id="customFormatArea">
+    <label>自定义格式模板（支持变量：{date} {assets} {debts} {incomes} {expenses} {totalAsset} {totalDebt} {netAsset} {totalIncome} {totalExpense} {balance}）：</label>
+    <textarea id="formatTemplate">
+【个人财务数据】{date}
+总资产：{totalAsset} 元 | 总负债：{totalDebt} 元 | 净资产：{netAsset} 元
+月总收入：{totalIncome} 元 | 月总支出：{totalExpense} 元 | 月收支差额：{balance} 元
+
+=== 资产明细 ===
+{assets}
+
+=== 负债明细 ===
+{debts}
+
+=== 收入明细 ===
+{incomes}
+
+=== 支出明细 ===
+{expenses}
+    </textarea>
+    <div class="hint-text">提示：变量会自动替换为对应数据，{assets}/{debts}等明细会自动格式化</div>
+  </div>
+</div>
+
+<!-- 新增：财务评价卡片 -->
+<div class="card evaluation-card">
+  <div class="evaluation-title">📊 个人财务状况评价</div>
+  <div id="evaluationText" class="evaluation-text">请填写资产、负债、收入、支出数据，系统将自动生成专业财务评价。</div>
+</div>
+
+<div class="grid">
+<div class="card">
+<div class="label">总资产</div>
+<div class="number green" id="totalAsset">0.00</div>
+</div>
+<div class="card">
+<div class="label">总负债</div>
+<div class="number red" id="totalDebt">0.00</div>
+</div>
+<div class="card">
+<div class="label">净资产</div>
+<div class="number" id="netAsset">0.00</div>
+</div>
+<div class="card">
+<div class="label">月总收入</div>
+<div class="number blue" id="totalIncome">0.00</div>
+</div>
+<div class="card">
+<div class="label">月总支出</div>
+<div class="number red" id="totalExpense">0.00</div>
+</div>
+<div class="card">
+<div class="label">月收支差额</div>
+<div class="number" id="balance">0.00</div>
+</div>
+</div>
+
+<div class="chart-grid">
+<div class="card">
+<h2>资产分布</h2>
+<div class="chart-box"><canvas id="assetChart"></canvas></div>
+</div>
+<div class="card">
+<h2>负债分布</h2>
+<div class="chart-box"><canvas id="debtChart"></canvas></div>
+</div>
+<div class="card">
+<h2>月收入分布</h2>
+<div class="chart-box"><canvas id="incomeChart"></canvas></div>
+</div>
+<div class="card">
+<h2>月支出分布</h2>
+<div class="chart-box"><canvas id="expenseChart"></canvas></div>
+</div>
+</div>
+
+<div class="grid" style="margin-top:20px">
+<div class="card" style="align-self:start">
+<h2>添加资产</h2>
+<form id="assetForm">
+<input type="text" placeholder="名称（现金/存款/基金等）" id="assetName" required>
+<input type="number" placeholder="金额" id="assetVal" step="0.01" required>
+<button type="submit">添加</button>
+</form>
+<table id="assetTable"><thead><tr><th>项目</th><th>金额</th><th>操作</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="card" style="align-self:start">
+<h2>添加负债</h2>
+<form id="debtForm">
+<input type="text" placeholder="名称（信用卡/贷款等）" id="debtName" required>
+<input type="number" placeholder="金额" id="debtVal" step="0.01" required>
+<button type="submit">添加</button>
+</form>
+<table id="debtTable"><thead><tr><th>项目</th><th>金额</th><th>操作</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="card" style="align-self:start">
+<h2>添加月收入</h2>
+<form id="incomeForm">
+<input type="text" placeholder="名称（工资/兼职/理财收益等）" id="incomeName" required>
+<input type="number" placeholder="金额" id="incomeVal" step="0.01" required>
+<button type="submit">添加</button>
+</form>
+<table id="incomeTable"><thead><tr><th>项目</th><th>金额</th><th>操作</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="card" style="align-self:start">
+<h2>添加月支出</h2>
+<form id="expenseForm">
+<input type="text" placeholder="名称（房租/餐饮/交通等）" id="expenseName" required>
+<input type="number" placeholder="金额" id="expenseVal" step="0.01" required>
+<button type="submit">添加</button>
+</form>
+<table id="expenseTable"><thead><tr><th>项目</th><th>金额</th><th>操作</th></tr></thead><tbody></tbody></table>
+</div>
+</div>
+
+<script>
+let assets = JSON.parse(localStorage.getItem('assets')) || []
+let debts = JSON.parse(localStorage.getItem('debts')) || []
+let incomes = JSON.parse(localStorage.getItem('incomes')) || []
+let expenses = JSON.parse(localStorage.getItem('expenses')) || []
+
+Chart.register(ChartDataLabels);
+
+const beautifulLabel = {
+  font: { size: 13, weight: '600' },
+  color: '#fff',
+  anchor: 'end',
+  align: 'end',
+  offset: 10,
+  formatter: (val, ctx) => {
+    const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+    return (((val/total)*100).toFixed(1) + '%');
+  }
+};
+
+const tooltipOpt = {
+  callbacks: {
+    label: (ctx) => `${ctx.label}: ¥${ctx.parsed.toFixed(2)} (${((ctx.parsed/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)`
+  }
+};
+
+const assetChart = new Chart(document.getElementById('assetChart'),{
+  type:'pie', data:{ labels:[], datasets:[{ data:[], backgroundColor:['#4D96E2','#40C057','#82C3EC','#20C997','#339AF0','#7950F2'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ tooltip:tooltipOpt, datalabels:beautifulLabel } }
+})
+const debtChart = new Chart(document.getElementById('debtChart'),{
+  type:'pie', data:{ labels:[], datasets:[{ data:[], backgroundColor:['#FF6B6B','#FF922B','#FF5C7C','#FA5252','#F783AC','#EE5A52'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ tooltip:tooltipOpt, datalabels:beautifulLabel } }
+})
+const incomeChart = new Chart(document.getElementById('incomeChart'),{
+  type:'pie', data:{ labels:[], datasets:[{ data:[], backgroundColor:['#51CF66','#38D9A9','#94D82D','#69DB7C','#40C057','#8CE99A'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ tooltip:tooltipOpt, datalabels:beautifulLabel } }
+})
+const expenseChart = new Chart(document.getElementById('expenseChart'),{
+  type:'pie', data:{ labels:[], datasets:[{ data:[], backgroundColor:['#FF7878','#FFB366','#FF9999','#FF8A80','#FFAB91','#FFCCBC'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ tooltip:tooltipOpt, datalabels:beautifulLabel } }
+})
+
+// ======================
+// 新增：智能财务评价
+// ======================
+function generateEvaluation() {
+  const totalAsset = assets.reduce((s, i) => s + Number(i.val), 0);
+  const totalDebt = debts.reduce((s, i) => s + Number(i.val), 0);
+  const netAsset = totalAsset - totalDebt;
+  const totalIncome = incomes.reduce((s, i) => s + Number(i.val), 0);
+  const totalExpense = expenses.reduce((s, i) => s + Number(i.val), 0);
+  const balance = totalIncome - totalExpense;
+  const debtRatio = totalAsset > 0 ? (totalDebt / totalAsset) * 100 : 0;
+
+  let level = "";
+  let desc = "";
+
+  if (totalAsset === 0 && totalIncome === 0) {
+    document.getElementById('evaluationText').innerText = "请填写资产、负债、收入、支出数据，系统将自动生成专业财务评价。";
+    return;
+  }
+
+  // 评价逻辑
+  if (netAsset > 0 && balance > 0 && debtRatio < 40) {
+    level = "🌟 财务状况：优秀";
+    desc = `你的财务结构非常健康！
+• 净资产为正，资产实力稳健。
+• 负债率仅${debtRatio.toFixed(1)}%，负债压力极低。
+• 每月稳定盈余¥${balance.toFixed(2)}，具备良好储蓄与投资能力。
+整体财务安全度高，抗风险能力强，可持续保持。`;
+  } 
+  else if (netAsset >= 0 && balance >= 0) {
+    level = "✅ 财务状况：良好";
+    desc = `你的财务状况整体稳健，处于健康区间。
+• 资产可以覆盖负债，无资不抵债风险。
+• 每月收支基本平衡或略有盈余。
+• 负债率${debtRatio.toFixed(1)}%，处于可控范围。
+建议继续保持储蓄习惯，逐步提升净资产规模。`;
+  } 
+  else if (balance > 0 || netAsset > -50000) {
+    level = "⚠️ 财务状况：一般，需优化";
+    desc = `你的财务状况基本平稳，但存在优化空间。
+• 当前净资产¥${netAsset.toFixed(2)}，需逐步提升。
+• 负债率${debtRatio.toFixed(1)}%，建议适当控制负债。
+• 月收支差额¥${balance.toFixed(2)}，可进一步优化支出结构，提高储蓄率。
+建议减少非必要支出，逐步积累资产。`;
+  } 
+  else {
+    level = "🔴 财务状况：存在风险";
+    desc = `你的财务结构存在一定压力，需要及时调整。
+• 净资产为负，负债超过资产，存在偿债压力。
+• 每月支出大于收入，长期可能导致负债持续增加。
+• 负债率${debtRatio.toFixed(1)}%，风险偏高。
+建议立即优化支出结构，增加收入来源，逐步降低负债。`;
+  }
+
+  document.getElementById('evaluationText').innerText = level + "\n" + desc;
+}
+
+// ======================
+// 新增：数据保存与导入功能
+// ======================
+// 初始化格式选择显示
+document.addEventListener('DOMContentLoaded', function() {
+  const formatType = document.getElementById('saveFormatType');
+  const customArea = document.getElementById('customFormatArea');
+  
+  // 初始隐藏自定义区域（默认JSON格式）
+  customArea.style.display = formatType.value === 'custom' ? 'block' : 'none';
+  
+  // 格式选择切换
+  formatType.addEventListener('change', function() {
+    customArea.style.display = this.value === 'custom' ? 'block' : 'none';
+  });
+});
+
+// 格式化明细数据为易读文本
+function formatListData(list, type) {
+  if (list.length === 0) return `暂无${type}数据`;
+  return list.map(item => `• ${item.name}：¥${Number(item.val).toFixed(2)}`).join('\n');
+}
+
+// 生成自定义格式文本
+function generateCustomFormat(data) {
+  let template = document.getElementById('formatTemplate').value.trim();
+  
+  // 替换所有变量
+  template = template.replace(/{date}/g, data.date)
+                     .replace(/{totalAsset}/g, data.totalAsset.toFixed(2))
+                     .replace(/{totalDebt}/g, data.totalDebt.toFixed(2))
+                     .replace(/{netAsset}/g, data.netAsset.toFixed(2))
+                     .replace(/{totalIncome}/g, data.totalIncome.toFixed(2))
+                     .replace(/{totalExpense}/g, data.totalExpense.toFixed(2))
+                     .replace(/{balance}/g, data.balance.toFixed(2))
+                     .replace(/{assets}/g, formatListData(assets, '资产'))
+                     .replace(/{debts}/g, formatListData(debts, '负债'))
+                     .replace(/{incomes}/g, formatListData(incomes, '收入'))
+                     .replace(/{expenses}/g, formatListData(expenses, '支出'));
+  
+  return template;
+}
+
+// 生成CSV格式数据
+function generateCSVData() {
+  // 表头
+  let csvContent = "类型,名称,金额\n";
+  
+  // 资产
+  assets.forEach(item => {
+    csvContent += `资产,${item.name},${Number(item.val).toFixed(2)}\n`;
+  });
+  
+  // 负债
+  debts.forEach(item => {
+    csvContent += `负债,${item.name},${Number(item.val).toFixed(2)}\n`;
+  });
+  
+  // 收入
+  incomes.forEach(item => {
+    csvContent += `收入,${item.name},${Number(item.val).toFixed(2)}\n`;
+  });
+  
+  // 支出
+  expenses.forEach(item => {
+    csvContent += `支出,${item.name},${Number(item.val).toFixed(2)}\n`;
+  });
+  
+  return csvContent;
+}
+
+// 保存数据到文件
+function saveData() {
+  const formatType = document.getElementById('saveFormatType').value;
+  const now = new Date();
+  const dateStr = now.toLocaleString('zh-CN');
+  const fileName = `个人财务数据_${now.getTime()}`;
+  
+  // 计算汇总数据
+  const totalAsset = assets.reduce((s, i) => s + Number(i.val), 0);
+  const totalDebt = debts.reduce((s, i) => s + Number(i.val), 0);
+  const netAsset = totalAsset - totalDebt;
+  const totalIncome = incomes.reduce((s, i) => s + Number(i.val), 0);
+  const totalExpense = expenses.reduce((s, i) => s + Number(i.val), 0);
+  const balance = totalIncome - totalExpense;
+
+  let fileContent, fileExt;
+  
+  // 根据选择的格式生成内容
+  switch(formatType) {
+    case 'json':
+      fileContent = JSON.stringify({
+        date: dateStr,
+        totalAsset,
+        totalDebt,
+        netAsset,
+        totalIncome,
+        totalExpense,
+        balance,
+        assets,
+        debts,
+        incomes,
+        expenses
+      }, null, 2);
+      fileExt = 'json';
+      break;
+      
+    case 'csv':
+      fileContent = generateCSVData();
+      fileExt = 'csv';
+      break;
+      
+    case 'custom':
+      fileContent = generateCustomFormat({
+        date: dateStr,
+        totalAsset,
+        totalDebt,
+        netAsset,
+        totalIncome,
+        totalExpense,
+        balance
+      });
+      fileExt = 'txt';
+      break;
+  }
+
+  // 创建下载链接
+  const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${fileName}.${fileExt}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  alert(`数据已保存为 ${fileName}.${fileExt}`);
+}
+
+// 导入数据
+function loadData() {
+  // 创建文件选择器
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,.csv,.txt';
+  
+  input.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      try {
+        let content = event.target.result;
+        
+        // 优先尝试JSON解析（兼容所有导出格式）
+        if (file.name.endsWith('.json')) {
+          const data = JSON.parse(content);
+          assets = data.assets || [];
+          debts = data.debts || [];
+          incomes = data.incomes || [];
+          expenses = data.expenses || [];
+        } 
+        // CSV格式解析（仅支持基础明细导入）
+        else if (file.name.endsWith('.csv')) {
+          const lines = content.split('\n').filter(line => line.trim() && !line.startsWith('类型,名称,金额'));
+          assets = [];
+          debts = [];
+          incomes = [];
+          expenses = [];
+          
+          lines.forEach(line => {
+            const [type, name, val] = line.split(',');
+            if (!type || !name || isNaN(val)) return;
+            
+            const item = { name: name.trim(), val: Number(val) };
+            switch(type.trim()) {
+              case '资产': assets.push(item); break;
+              case '负债': debts.push(item); break;
+              case '收入': incomes.push(item); break;
+              case '支出': expenses.push(item); break;
+            }
+          });
+        }
+        // 自定义文本格式暂不支持导入（提示用户使用JSON）
+        else {
+          alert('自定义文本格式暂不支持导入，请使用JSON格式备份/恢复数据');
+          return;
+        }
+        
+        // 保存到本地存储并刷新页面
+        localStorage.setItem('assets', JSON.stringify(assets));
+        localStorage.setItem('debts', JSON.stringify(debts));
+        localStorage.setItem('incomes', JSON.stringify(incomes));
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+        
+        calc();
+        alert('数据导入成功！');
+        
+      } catch (error) {
+        alert(`数据导入失败：${error.message}\n请确保文件格式正确`);
+      }
+    };
+    
+    reader.readAsText(file, 'UTF-8');
+  });
+  
+  input.click();
+}
+
+function calc(){
+  const totalAsset = assets.reduce((s,i)=>s+Number(i.val),0)
+  const totalDebt = debts.reduce((s,i)=>s+Number(i.val),0)
+  const netAsset = totalAsset - totalDebt
+  const totalIncome = incomes.reduce((s,i)=>s+Number(i.val),0)
+  const totalExpense = expenses.reduce((s,i)=>s+Number(i.val),0)
+  const balance = totalIncome - totalExpense
+
+  document.getElementById('totalAsset').textContent = totalAsset.toFixed(2)
+  document.getElementById('totalDebt').textContent = totalDebt.toFixed(2)
+  document.getElementById('netAsset').textContent = netAsset.toFixed(2)
+  document.getElementById('totalIncome').textContent = totalIncome.toFixed(2)
+  document.getElementById('totalExpense').textContent = totalExpense.toFixed(2)
+  document.getElementById('balance').textContent = balance.toFixed(2)
+  document.getElementById('balance').className = 'number ' + (balance >= 0 ? 'green' : 'red')
+
+  const updateChart = (chart, list) => {
+    const names = [...new Set(list.map(i=>i.name))];
+    const sums = names.map(n=>list.filter(i=>i.name===n).reduce((s,i)=>s+Number(i.val),0));
+    chart.data.labels = names;
+    chart.data.datasets[0].data = sums;
+    chart.update();
+  };
+
+  updateChart(assetChart, assets);
+  updateChart(debtChart, debts);
+  updateChart(incomeChart, incomes);
+  updateChart(expenseChart, expenses);
+
+  localStorage.setItem('assets',JSON.stringify(assets))
+  localStorage.setItem('debts',JSON.stringify(debts))
+  localStorage.setItem('incomes',JSON.stringify(incomes))
+  localStorage.setItem('expenses',JSON.stringify(expenses))
+
+  const render = (id,data,edit,del)=>{
+    const t=document.getElementById(id).querySelector('tbody');
+    t.innerHTML=data.map((i,idx)=>`<tr><td>${i.name}</td><td>${Number(i.val).toFixed(2)}</td><td><button class="edit" onclick="${edit}(${idx})">修改</button> <button class="del" onclick="${del}(${idx})">删除</button></td></tr>`).join('')
+  }
+  render('assetTable',assets,'editAsset','delAsset')
+  render('debtTable',debts,'editDebt','delDebt')
+  render('incomeTable',incomes,'editIncome','delIncome')
+  render('expenseTable',expenses,'editExpense','delExpense')
+
+  // 生成评价
+  generateEvaluation();
+}
+
+function delAsset(d){assets.splice(d,1);calc()}
+function delDebt(d){debts.splice(d,1);calc()}
+function delIncome(d){incomes.splice(d,1);calc()}
+function delExpense(d){expenses.splice(d,1);calc()}
+
+function editAsset(idx){const i=assets[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){assets[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editDebt(idx){const i=debts[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){debts[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editIncome(idx){const i=incomes[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){incomes[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editExpense(idx){const i=expenses[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){expenses[idx]={name:n.trim(),val:Number(v)};calc()}}
+
+document.getElementById('assetForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('assetName').value.trim();const val=document.getElementById('assetVal').value;assets.push({name,val});e.target.reset();calc()})
+document.getElementById('debtForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('debtName').value.trim();const val=document.getElementById('debtVal').value;debts.push({name,val});e.target.reset();calc()})
+document.getElementById('incomeForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('incomeName').value.trim();const val=document.getElementById('incomeVal').value;incomes.push({name,val});e.target.reset();calc()})
+document.getElementById('expenseForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('expenseName').value.trim();const val=document.getElementById('expenseVal').value;expenses.push({name,val});e.target.reset();calc()})
+
+calc()
+</script>
+</body>
+</html>
