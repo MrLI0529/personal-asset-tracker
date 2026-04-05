@@ -92,7 +92,17 @@ th{background:#f5f7fa}
   }
 }
 
-/* 顶部用户栏 */
+/* Google 登录遮罩 */
+#login-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(255,255,255,0.97);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+}
+#login-overlay h2 { font-size: 22px; margin-bottom: 8px; color: #165DFF; }
+#login-overlay p { color: #666; margin-bottom: 24px; font-size: 15px; }
 #user-bar {
   position: fixed; top: 0; left: 0; right: 0;
   background: #fff; border-bottom: 1px solid #eee;
@@ -101,84 +111,40 @@ th{background:#f5f7fa}
   z-index: 100;
 }
 #user-bar img { width: 32px; height: 32px; border-radius: 50%; }
-#user-bar .user-info { font-size: 14px; color: #333; flex: 1; }
-#user-bar .login-hint { font-size: 13px; color: #888; flex: 1; }
+#user-bar span { font-size: 14px; color: #333; flex: 1; }
 #user-bar button { 
   padding: 6px 14px; background: #f5f5f5; 
   color: #333; border: 1px solid #ddd; 
   border-radius: 6px; cursor: pointer; font-size: 13px;
 }
-body { padding-top: 56px; }
-
-/* 登录弹窗（编辑时触发） */
-#login-modal {
-  display: none;
-  position: fixed; top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.45);
-  align-items: center; justify-content: center;
-  z-index: 9999;
-}
-#login-modal.show { display: flex; }
-#login-modal-box {
-  background: #fff; border-radius: 16px;
-  padding: 36px 32px; text-align: center;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-  min-width: 300px;
-}
-#login-modal-box h3 { font-size: 18px; margin-bottom: 8px; color: #222; }
-#login-modal-box p { color: #666; font-size: 14px; margin-bottom: 24px; }
-#login-modal-close {
-  margin-top: 16px; background: none; border: none;
-  color: #aaa; cursor: pointer; font-size: 13px;
-}
+.logged-in { padding-top: 56px; }
 </style>
 </head>
 <body>
 
-<!-- GSI 初始化（隐藏） -->
-<div id="g_id_onload"
-     data-client_id="520174491188-rveqse0jt15eju19mng92blkj28ltp42.apps.googleusercontent.com"
-     data-callback="handleLogin"
-     data-auto_prompt="false">
-</div>
-
-<!-- 顶部用户栏（始终显示） -->
-<div id="user-bar">
-  <span>📊 个人资产总览</span>
-  <!-- 未登录状态 -->
-  <div id="bar-guest">
-    <span class="login-hint">登录后可编辑数据</span>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-size="medium"
-         data-theme="outline"
-         data-text="signin_with"
-         data-shape="rectangular">
-    </div>
+<!-- 登录遮罩（未登录时显示） -->
+<div id="login-overlay">
+  <h2>🔐 个人资产总览</h2>
+  <p>请使用 Google 账号登录以访问你的数据</p>
+  <div id="g_id_onload"
+       data-client_id="520174491188-rveqse0jt15eju19mng92blkj28ltp42.apps.googleusercontent.com"
+       data-callback="handleLogin"
+       data-auto_prompt="false">
   </div>
-  <!-- 已登录状态 -->
-  <div id="bar-user" style="display:none; display:flex; align-items:center; gap:10px;">
-    <img id="user-avatar" src="">
-    <span class="user-info" id="user-name"></span>
-    <button onclick="handleLogout()">退出登录</button>
+  <div class="g_id_signin"
+       data-type="standard"
+       data-size="large"
+       data-theme="filled_blue"
+       data-text="sign_in_with"
+       data-shape="rectangular">
   </div>
 </div>
 
-<!-- 登录弹窗（编辑时触发） -->
-<div id="login-modal">
-  <div id="login-modal-box">
-    <h3>🔐 需要登录才能编辑</h3>
-    <p>数据编辑功能仅对登录用户开放</p>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-size="large"
-         data-theme="filled_blue"
-         data-text="sign_in_with"
-         data-shape="rectangular">
-    </div>
-    <button id="login-modal-close" onclick="closeLoginModal()">取消</button>
-  </div>
+<!-- 已登录用户栏 -->
+<div id="user-bar" style="display:none">
+  <img id="user-avatar" src="">
+  <span id="user-name"></span>
+  <button onclick="handleLogout()">退出登录</button>
 </div>
 
 <h1>个人资产总览</h1>
@@ -186,8 +152,8 @@ body { padding-top: 56px; }
 <!-- 新增：保存功能区域 -->
 <div class="save-section">
   <h2 style="margin:0;">数据备份与恢复</h2>
-  <button class="save" onclick="if(!requireLogin())return;saveData()">💾 保存当前数据</button>
-  <button class="load" onclick="if(!requireLogin())return;loadData()">📤 导入数据</button>
+  <button class="save" onclick="saveData()">💾 保存当前数据</button>
+  <button class="load" onclick="loadData()">📤 导入数据</button>
   
   <div class="save-format">
     <label>保存格式：</label>
@@ -674,20 +640,20 @@ function calc(){
   generateEvaluation();
 }
 
-function delAsset(d){if(!requireLogin())return;assets.splice(d,1);calc()}
-function delDebt(d){if(!requireLogin())return;debts.splice(d,1);calc()}
-function delIncome(d){if(!requireLogin())return;incomes.splice(d,1);calc()}
-function delExpense(d){if(!requireLogin())return;expenses.splice(d,1);calc()}
+function delAsset(d){assets.splice(d,1);calc()}
+function delDebt(d){debts.splice(d,1);calc()}
+function delIncome(d){incomes.splice(d,1);calc()}
+function delExpense(d){expenses.splice(d,1);calc()}
 
-function editAsset(idx){if(!requireLogin())return;const i=assets[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){assets[idx]={name:n.trim(),val:Number(v)};calc()}}
-function editDebt(idx){if(!requireLogin())return;const i=debts[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){debts[idx]={name:n.trim(),val:Number(v)};calc()}}
-function editIncome(idx){if(!requireLogin())return;const i=incomes[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){incomes[idx]={name:n.trim(),val:Number(v)};calc()}}
-function editExpense(idx){if(!requireLogin())return;const i=expenses[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){expenses[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editAsset(idx){const i=assets[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){assets[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editDebt(idx){const i=debts[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){debts[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editIncome(idx){const i=incomes[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){incomes[idx]={name:n.trim(),val:Number(v)};calc()}}
+function editExpense(idx){const i=expenses[idx];const p=prompt(`修改：${i.name}|${i.val}`,`${i.name}|${i.val}`);if(!p)return;const[n,v]=p.split('|');if(n&&!isNaN(v)){expenses[idx]={name:n.trim(),val:Number(v)};calc()}}
 
-document.getElementById('assetForm').addEventListener('submit',e=>{e.preventDefault();if(!requireLogin())return;const name=document.getElementById('assetName').value.trim();const val=document.getElementById('assetVal').value;assets.push({name,val});e.target.reset();calc()})
-document.getElementById('debtForm').addEventListener('submit',e=>{e.preventDefault();if(!requireLogin())return;const name=document.getElementById('debtName').value.trim();const val=document.getElementById('debtVal').value;debts.push({name,val});e.target.reset();calc()})
-document.getElementById('incomeForm').addEventListener('submit',e=>{e.preventDefault();if(!requireLogin())return;const name=document.getElementById('incomeName').value.trim();const val=document.getElementById('incomeVal').value;incomes.push({name,val});e.target.reset();calc()})
-document.getElementById('expenseForm').addEventListener('submit',e=>{e.preventDefault();if(!requireLogin())return;const name=document.getElementById('expenseName').value.trim();const val=document.getElementById('expenseVal').value;expenses.push({name,val});e.target.reset();calc()})
+document.getElementById('assetForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('assetName').value.trim();const val=document.getElementById('assetVal').value;assets.push({name,val});e.target.reset();calc()})
+document.getElementById('debtForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('debtName').value.trim();const val=document.getElementById('debtVal').value;debts.push({name,val});e.target.reset();calc()})
+document.getElementById('incomeForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('incomeName').value.trim();const val=document.getElementById('incomeVal').value;incomes.push({name,val});e.target.reset();calc()})
+document.getElementById('expenseForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('expenseName').value.trim();const val=document.getElementById('expenseVal').value;expenses.push({name,val});e.target.reset();calc()})
 
 // ===== Google 登录逻辑 =====
 function handleLogin(response) {
@@ -695,37 +661,22 @@ function handleLogin(response) {
   const user = { name: payload.name, email: payload.email, avatar: payload.picture };
   localStorage.setItem('gUser', JSON.stringify(user));
   showUser(user);
-  closeLoginModal();
 }
 
 function showUser(user) {
-  document.getElementById('bar-guest').style.display = 'none';
-  document.getElementById('bar-user').style.display = 'flex';
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('user-bar').style.display = 'flex';
   document.getElementById('user-avatar').src = user.avatar;
   document.getElementById('user-name').textContent = user.name;
+  document.body.classList.add('logged-in');
 }
 
 function handleLogout() {
   localStorage.removeItem('gUser');
-  document.getElementById('bar-guest').style.display = 'flex';
-  document.getElementById('bar-user').style.display = 'none';
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('user-bar').style.display = 'none';
+  document.body.classList.remove('logged-in');
   google.accounts.id.disableAutoSelect();
-}
-
-function isLoggedIn() {
-  return !!localStorage.getItem('gUser');
-}
-
-function requireLogin() {
-  if (!isLoggedIn()) {
-    document.getElementById('login-modal').classList.add('show');
-    return false;
-  }
-  return true;
-}
-
-function closeLoginModal() {
-  document.getElementById('login-modal').classList.remove('show');
 }
 
 // 检查是否已登录
