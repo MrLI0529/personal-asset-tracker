@@ -6,6 +6,7 @@
 <title>个人资产总览</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 body{background:#f8f9fa;color:#222;padding:20px;max-width:1200px;margin:0 auto}
@@ -90,9 +91,61 @@ th{background:#f5f7fa}
     align-items: stretch;
   }
 }
+
+/* Google 登录遮罩 */
+#login-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(255,255,255,0.97);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+}
+#login-overlay h2 { font-size: 22px; margin-bottom: 8px; color: #165DFF; }
+#login-overlay p { color: #666; margin-bottom: 24px; font-size: 15px; }
+#user-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  background: #fff; border-bottom: 1px solid #eee;
+  padding: 10px 20px;
+  display: flex; align-items: center; gap: 12px;
+  z-index: 100;
+}
+#user-bar img { width: 32px; height: 32px; border-radius: 50%; }
+#user-bar span { font-size: 14px; color: #333; flex: 1; }
+#user-bar button { 
+  padding: 6px 14px; background: #f5f5f5; 
+  color: #333; border: 1px solid #ddd; 
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.logged-in { padding-top: 56px; }
 </style>
 </head>
 <body>
+
+<!-- 登录遮罩（未登录时显示） -->
+<div id="login-overlay">
+  <h2>🔐 个人资产总览</h2>
+  <p>请使用 Google 账号登录以访问你的数据</p>
+  <div id="g_id_onload"
+       data-client_id="520174491188-rveqse0jt15eju19mng92blkj28ltp42.apps.googleusercontent.com"
+       data-callback="handleLogin"
+       data-auto_prompt="false">
+  </div>
+  <div class="g_id_signin"
+       data-type="standard"
+       data-size="large"
+       data-theme="filled_blue"
+       data-text="sign_in_with"
+       data-shape="rectangular">
+  </div>
+</div>
+
+<!-- 已登录用户栏 -->
+<div id="user-bar" style="display:none">
+  <img id="user-avatar" src="">
+  <span id="user-name"></span>
+  <button onclick="handleLogout()">退出登录</button>
+</div>
 
 <h1>个人资产总览</h1>
 
@@ -601,6 +654,37 @@ document.getElementById('assetForm').addEventListener('submit',e=>{e.preventDefa
 document.getElementById('debtForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('debtName').value.trim();const val=document.getElementById('debtVal').value;debts.push({name,val});e.target.reset();calc()})
 document.getElementById('incomeForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('incomeName').value.trim();const val=document.getElementById('incomeVal').value;incomes.push({name,val});e.target.reset();calc()})
 document.getElementById('expenseForm').addEventListener('submit',e=>{e.preventDefault();const name=document.getElementById('expenseName').value.trim();const val=document.getElementById('expenseVal').value;expenses.push({name,val});e.target.reset();calc()})
+
+// ===== Google 登录逻辑 =====
+function handleLogin(response) {
+  const payload = JSON.parse(atob(response.credential.split('.')[1]));
+  const user = { name: payload.name, email: payload.email, avatar: payload.picture };
+  localStorage.setItem('gUser', JSON.stringify(user));
+  showUser(user);
+}
+
+function showUser(user) {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('user-bar').style.display = 'flex';
+  document.getElementById('user-avatar').src = user.avatar;
+  document.getElementById('user-name').textContent = user.name;
+  document.body.classList.add('logged-in');
+}
+
+function handleLogout() {
+  localStorage.removeItem('gUser');
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('user-bar').style.display = 'none';
+  document.body.classList.remove('logged-in');
+  google.accounts.id.disableAutoSelect();
+}
+
+// 检查是否已登录
+const savedUser = localStorage.getItem('gUser');
+if (savedUser) {
+  showUser(JSON.parse(savedUser));
+}
+// ===========================
 
 calc()
 </script>
